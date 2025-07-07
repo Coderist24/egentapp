@@ -62,6 +62,8 @@ def show_login_page():
             # MSAL ayarları - environment variables'dan al
             import msal
             import requests
+            import os
+            import urllib.parse
             
             # Azure Web App environment'da bu değerler Application Settings'de olmalı
             CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", "c7790b94-d830-4746-961f-8c715a380c5e")
@@ -69,17 +71,19 @@ def show_login_page():
             CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "6Jl8Q~Kue3BfEbXdbc3O-68WVEIPZeNFD-Bkub2p")
             
             # Redirect URI'yi dinamik olarak belirle
-            # Azure Web App'te çalışıyorsa otomatik olarak algıla
             if "WEBSITE_SITE_NAME" in os.environ:
-                # Azure Web App environment
-                site_name = os.environ.get("WEBSITE_SITE_NAME")
-                REDIRECT_URI = f"https://egentapp-b4gqeudnc3h8emd3.westeurope-01.azurewebsites.net/"
-            else:
-                # Local development
                 REDIRECT_URI = "https://egentapp-b4gqeudnc3h8emd3.westeurope-01.azurewebsites.net/"
+            else:
+                REDIRECT_URI = "http://localhost:8502"
             
             AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
             SCOPE = ["User.Read"]
+
+            # --- DEBUG: Print current URL and query params ---
+            st.markdown("---")
+            st.info(f"**DEBUG:** Current page URL: {st.experimental_get_query_params()}")
+            st.info(f"**DEBUG:** Redirect URI in use: {REDIRECT_URI}")
+            st.info(f"**DEBUG:** AUTHORITY: {AUTHORITY}")
             
             try:
                 app = msal.ConfidentialClientApplication(
@@ -93,20 +97,20 @@ def show_login_page():
                     SCOPE,
                     redirect_uri=REDIRECT_URI
                 )
-                
+                st.info(f"**DEBUG:** Auth URL: {auth_url}")
                 st.markdown(f"[Microsoft ile Giriş Yap]({auth_url})")
 
                 # Callback: URL'de kod varsa token al
-                query_params = st.query_params
+                query_params = st.experimental_get_query_params()
                 if "code" in query_params:
                     code = query_params["code"][0]
+                    st.info(f"**DEBUG:** Received code: {code}")
                     result = app.acquire_token_by_authorization_code(
                         code,
                         scopes=SCOPE,
                         redirect_uri=REDIRECT_URI
                     )
                     if "access_token" in result:
-                        # Kullanıcı bilgilerini al
                         user = requests.get(
                             "https://graph.microsoft.com/v1.0/me",
                             headers={"Authorization": f"Bearer {result['access_token']}"}
@@ -120,11 +124,12 @@ def show_login_page():
                         st.rerun()
                     else:
                         st.error("Giriş başarısız: " + str(result.get("error_description", "Bilinmeyen hata")))
-            
+                else:
+                    st.warning("**DEBUG:** No 'code' parameter found in URL after redirect. If you just logged in, check that your redirect URI matches exactly in Azure Portal and that your app is running at the correct URL.")
             except Exception as e:
                 st.error(f"❌ Azure AD authentication hatası: {str(e)}")
                 st.info("Lütfen Azure AD ayarlarınızı kontrol edin.")
-        
+            
         # Azure AD login help
         st.markdown("---")
         st.markdown("### ℹ️ Azure AD Giriş Bilgileri")
