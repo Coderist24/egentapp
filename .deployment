@@ -1,0 +1,2 @@
+[config]
+command = python app_startup.py
